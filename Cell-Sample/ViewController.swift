@@ -7,22 +7,32 @@
 
 import UIKit
 
-/*
- enum State: 状態によってタップ時の処理を切り替える時に使う
- dataSource: どの行が何色かを表す
- didSelectメソッド: 現在のstateによって、dataSourceの書き換え、tableViewのreload、新たなstateへの移行を行う
- cellForRowメソッド: dataSourceの内容を元にセルへどう表示するかを書く
- */
-
 final class ViewController: UIViewController {
     
-    enum State {
-        case initial(IndexPath?, IndexPath?)
-        case firstTapped(IndexPath)
-        case secondTapped(IndexPath, IndexPath)
-        case thirdTapped(IndexPath, IndexPath, IndexPath)
+    private struct OneCardDetail {
+        var firstIndexPath: IndexPath
     }
-    struct Item {
+    private struct TwoCardsDetail {
+        var firstIndexPath: IndexPath
+        var secondIndexPath: IndexPath
+    }
+    private enum FlipOverState {
+        case none
+        case oneCard(OneCardDetail)
+        case twoCards(TwoCardsDetail)
+        func nextState(tappedIndexPath: IndexPath) -> FlipOverState {
+            switch self {
+                case .none:
+                    return .oneCard(OneCardDetail(firstIndexPath: tappedIndexPath))
+                case .oneCard(let detail):
+                    return .twoCards(TwoCardsDetail(firstIndexPath: detail.firstIndexPath,
+                                                    secondIndexPath: tappedIndexPath))
+                case .twoCards:
+                    return .none
+            }
+        }
+    }
+    private struct Item {
         var name: String
         var color: UIColor
     }
@@ -30,7 +40,7 @@ final class ViewController: UIViewController {
     @IBOutlet private weak var tableView: UITableView!
     
     private var dataSource = [Item](repeating: Item(name: "AAA", color: .black), count: 10)
-    private var state: State = .initial(nil, nil)
+    private var state: FlipOverState = .none
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -49,44 +59,23 @@ extension ViewController: UITableViewDelegate {
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        var items = [IndexPath]()
         switch state {
-            case .initial(let thirdIndexPath, let fourthIndexPath):
-                if let thirdIndexPath = thirdIndexPath,
-                   let fourthIndexPath = fourthIndexPath {
-                    items = [thirdIndexPath, fourthIndexPath, indexPath]
-                    changeDefaultColor(thirdIndexPath, fourthIndexPath)
-                }
-                state = .firstTapped(indexPath)
-            case .firstTapped(let firstIndexPath):
-                changeSelectedColor(firstIndexPath, indexPath)
-                items = [firstIndexPath, indexPath]
-                state = .secondTapped(firstIndexPath, indexPath)
-            case .secondTapped(let firstIndexPath, let secondIndexPath):
-                changeDefaultColor(firstIndexPath, secondIndexPath)
-                items = [firstIndexPath, secondIndexPath, indexPath]
-                state = .thirdTapped(firstIndexPath, secondIndexPath, indexPath)
-            case .thirdTapped(let firstIndexPath, let secondIndexPath, let thirdIndexPath):
-                changeDefaultColor(firstIndexPath, secondIndexPath)
-                changeSelectedColor(thirdIndexPath, indexPath)
-                items = [firstIndexPath, secondIndexPath, thirdIndexPath, indexPath]
-                state = .initial(thirdIndexPath, indexPath)
+            case .none:
+                break
+            case .oneCard(let detail):
+                dataSource[detail.firstIndexPath.row].color = .red
+                dataSource[indexPath.row].color = .red
+                tableView.reloadRows(at: [detail.firstIndexPath,
+                                          indexPath],
+                                     with: .automatic)
+            case .twoCards(let detail):
+                dataSource[detail.firstIndexPath.row].color = .black
+                dataSource[detail.secondIndexPath.row].color = .black
+                tableView.reloadRows(at: [detail.firstIndexPath,
+                                          detail.secondIndexPath],
+                                     with: .automatic)
         }
-        reloadTable(at: items)
-    }
-    
-    private func changeDefaultColor(_ i: IndexPath, _ j: IndexPath) {
-        dataSource[i.row].color = .black
-        dataSource[j.row].color = .black
-    }
-    
-    private func changeSelectedColor(_ i: IndexPath, _ j: IndexPath) {
-        dataSource[i.row].color = .red
-        dataSource[j.row].color = .red
-    }
-    
-    private func reloadTable(at items: [IndexPath]) {
-        tableView.reloadRows(at: items, with: .automatic)
+        state = state.nextState(tappedIndexPath: indexPath)
     }
 }
 
